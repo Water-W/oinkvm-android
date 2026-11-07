@@ -1,0 +1,37 @@
+[package]
+name = "oink-android"
+description = "Android host: runs the Oink backend in-process and bridges native input, screen and clipboard over JNI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+name = "oink_android"
+# cdylib: liboink_android.so loaded by the Android app; rlib: host tests.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+oink-agent.workspace = true
+oink-clipboard.workspace = true
+oink-display.workspace = true
+oink-foundation.workspace = true
+oink-input.workspace = true
+oink-network.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+[dev-dependencies]
+tempfile = "3"
+oink-test-support = { path = "../../tests/support" }
+
+[lints]
+workspace = true

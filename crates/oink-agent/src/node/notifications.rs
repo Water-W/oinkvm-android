@@ -850,6 +850,14 @@ fn copy(language: crate::config::UiLanguage, kind: u8) -> &'static str {
         ][index],
     }
 }
+/// Other platforms (Android) pass the host locale via `LANG` (BCP-47 or POSIX).
+#[cfg(not(any(target_os = "macos", windows)))]
+fn system_language() -> String {
+    std::env::var("LANG")
+        .ok()
+        .and_then(|l| l.split('.').next().map(|l| l.replace('_', "-")))
+        .unwrap_or_default()
+}
 #[cfg(target_os = "macos")]
 fn system_language() -> String {
     objc2_foundation::NSLocale::preferredLanguages()

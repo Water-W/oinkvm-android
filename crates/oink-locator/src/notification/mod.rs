@@ -16,6 +16,35 @@ mod windows;
 use macos as platform;
 #[cfg(windows)]
 use windows as platform;
+/// Platforms without native toast surfaces (Android, other Unix) keep the
+/// queue headless: `platform()` reports no surface.
+#[cfg(not(any(target_os = "macos", windows)))]
+mod platform {
+    pub struct Backend;
+    impl Backend {
+        #[allow(clippy::new_ret_no_self)]
+        pub fn new() -> Option<super::NullSurface> {
+            None
+        }
+    }
+}
+#[cfg(not(any(target_os = "macos", windows)))]
+#[derive(Debug)]
+pub struct NullSurface;
+#[cfg(not(any(target_os = "macos", windows)))]
+impl Surface for NullSurface {
+    fn present(&mut self, _: Vec<Frame>) {}
+    fn clicks(&mut self) -> Vec<Click> {
+        Vec::new()
+    }
+    fn reduced_motion(&self) -> bool {
+        true
+    }
+}
+#[cfg(not(any(target_os = "macos", windows)))]
+pub fn scale_for(_display: &DisplayInfo) -> f64 {
+    1.0
+}
 
 #[cfg(target_os = "macos")]
 pub fn scale_for(_display: &DisplayInfo) -> f64 {

@@ -3190,6 +3190,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "oink-android"
+version = "0.3.3"
+dependencies = [
+ "anyhow",
+ "jni",
+ "oink-agent",
+ "oink-clipboard",
+ "oink-display",
+ "oink-foundation",
+ "oink-input",
+ "oink-network",
+ "oink-test-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "oink-audio"
 version = "0.3.3"
 dependencies = [

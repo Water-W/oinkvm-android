@@ -18,6 +18,24 @@ mod platform;
 #[cfg(windows)]
 #[path = "windows.rs"]
 mod platform;
+/// No native projection windows outside macOS and Windows.
+#[cfg(not(any(target_os = "macos", windows)))]
+mod platform {
+    use super::Frame;
+    use std::sync::Arc;
+    pub(super) struct Backend;
+    impl Backend {
+        pub(super) fn new(_: Arc<crate::diagnostics::Health>) -> Option<Self> {
+            None
+        }
+        pub(super) fn present(&mut self, _: Vec<Frame>) {}
+        pub(super) fn hide(&mut self) {}
+        pub(super) fn pump(&mut self) {}
+    }
+    pub(super) fn annotation_unit(_screen: oink_foundation::Rect) -> f64 {
+        1.0
+    }
+}
 
 #[cfg(target_os = "macos")]
 pub(crate) fn diagnose(health: &crate::diagnostics::Health, mtm: objc2::MainThreadMarker) {

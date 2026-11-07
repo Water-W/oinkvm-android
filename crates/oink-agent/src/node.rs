@@ -317,6 +317,13 @@ impl Node {
         Self::start_with_services(opts, false).await
     }
 
+    /// Embedded hosts without desktop native services (Android): the platform
+    /// backends are supplied by the host; audio recovery, the microphone
+    /// plug-in, File Provider and power monitoring do not start.
+    pub async fn start_embedded(opts: NodeOptions) -> anyhow::Result<Self> {
+        Self::start_with_services(opts, false).await
+    }
+
     pub(crate) fn native_services_enabled(&self) -> bool {
         self.inner.native_services
     }

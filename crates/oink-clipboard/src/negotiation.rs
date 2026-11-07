@@ -55,6 +55,23 @@ pub fn formats() -> dto::FormatSupport {
     .expect("constant clipboard reconstruction profile")
 }
 
+/// The reconstruction target a receiver requests for an offer from `source`.
+///
+/// macOS and Windows reconstruct their own native formats. Other receivers
+/// (Android) advertise no native namespace, so they must always negotiate the
+/// portable contracts: requesting as the *other* desktop platform makes the
+/// receiver and every released source select the same portable format.
+pub fn receive_target(source: oink_foundation::clipboard::ClipPlatform) -> oink_foundation::clipboard::ClipPlatform {
+    use oink_foundation::clipboard::ClipPlatform;
+    if cfg!(target_os = "macos") {
+        ClipPlatform::Mac
+    } else if cfg!(windows) || source == ClipPlatform::Mac {
+        ClipPlatform::Windows
+    } else {
+        ClipPlatform::Mac
+    }
+}
+
 pub fn native_format(format: &oink_foundation::content::NativeFormat) -> String {
     use oink_foundation::content::NativeFormat;
     match format {

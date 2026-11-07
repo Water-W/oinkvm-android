@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_label">发送到 Oink 剪贴板</string>
+    <string name="accessibility_label">Oink 远程控制</string>
+    <string name="accessibility_description">让已配对电脑的键盘和鼠标控制这台设备：Oink 会显示指针，执行点按、滑动和滚动，并向当前聚焦的输入框输入文字。除了要编辑的输入框，Oink 不读取或收集屏幕内容。</string>
+    <string name="channel_name">共享</string>
+    <string name="notification_title">Oink 正在共享</string>
+    <string name="notification_text">已配对的电脑可以控制这台设备</string>
+    <string name="notification_send_clipboard">发送剪贴板</string>
+    <string name="notification_stop">停止</string>
+    <string name="banner_accessibility">请在「无障碍」设置中开启「Oink 远程控制」，其他电脑才能控制这台设备。</string>
+    <string name="banner_open">打开设置</string>
+    <string name="clipboard_sent">剪贴板已发送到你的设备</string>
+    <string name="clipboard_empty">剪贴板中没有文本</string>
+    <string name="start_failed">Oink 无法启动：%1$s</string>
+</resources>

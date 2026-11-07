@@ -1,0 +1,7 @@
+.gradle/
+build/
+app/build/
+local.properties
+# Produced by build.py from the Rust workspace and apps/oink/dist.
+app/src/main/jniLibs/
+app/src/main/assets/web/

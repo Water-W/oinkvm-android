@@ -192,6 +192,12 @@ impl AgentHost {
         Self::start_with_node(opts, mode, Node::start)
     }
 
+    /// Host-supplied platform backends without desktop native services or local
+    /// IPC (Android): the embedding app calls [`Self::api`] in-process.
+    pub fn start_embedded(opts: NodeOptions) -> anyhow::Result<Self> {
+        Self::start_with_node(opts, IpcMode::Off, Node::start_embedded)
+    }
+
     /// Use the real host lifecycle with injected fake platform backends and no
     /// native startup services. This entry point is absent from release builds.
     #[cfg(debug_assertions)]

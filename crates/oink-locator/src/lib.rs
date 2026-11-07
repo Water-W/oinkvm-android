@@ -11,6 +11,9 @@
 //! [`CursorTrail`] 是可在任意线程调用的句柄：[`CursorTrail::pointer`] 在截获回调里调用，只把点追加到一个
 //! 有界的纯模型；绘制在专门的线程里，只在显示或淡出期间按屏幕刷新率出帧，其余时间睡在条件变量上（零开销）。
 
+// Without a native renderer (Android and other Unix) only the pure models run.
+#![cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+
 pub mod diagnostics;
 pub mod effect;
 pub mod notification;
@@ -602,7 +605,7 @@ mod platform {
     pub(crate) struct Backend;
 
     impl Backend {
-        pub(crate) fn new() -> Option<Self> {
+        pub(crate) fn new(_: Arc<crate::diagnostics::Health>) -> Option<Self> {
             None
         }
         pub(crate) fn set_displays(&mut self, _: &[DisplayInfo]) {}
