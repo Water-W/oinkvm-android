@@ -69,6 +69,12 @@ adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
 4. In the arrangement, place the phone screen next to the computer's screen,
    then move the computer's pointer across that edge.
 
+If Android says the setting is restricted ("Restricted setting" / "受限制的设置"),
+which Android 13+ does for apps installed from a downloaded file: open
+**Settings → Apps → Oink**, tap **⋮** in the top-right corner, choose **Allow
+restricted settings**, confirm, and turn the accessibility service on again.
+Apps installed with `adb install` are not restricted.
+
 Logs and diagnostics are written under the app's private storage and can be
 exported from the interface like on the desktop.
 

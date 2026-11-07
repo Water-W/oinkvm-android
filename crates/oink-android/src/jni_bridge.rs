@@ -188,25 +188,24 @@ pub extern "system" fn Java_com_hachiwii_oink_android_Native_nativeStart<'local>
     let (Ok(vm), Ok(callbacks)) = (env.get_java_vm(), env.new_global_ref(callbacks)) else {
         return java_string(&mut env, "JNI references unavailable");
     };
-    // SAFETY: called once, before this library starts any thread that reads the
-    // environment. Every storage root (data, cache, logs) follows OINK_HOME,
-    // and the notification language follows LANG on platforms without a
-    // native locale query.
-    unsafe {
-        std::env::set_var("OINK_HOME", &data_dir);
-        if !language.is_empty() {
-            std::env::set_var("LANG", &language);
-        }
-    }
-    oink_agent::logs::init_service();
-    let config = StartConfig {
-        data_dir: PathBuf::from(&data_dir).join("data"),
-        device_name,
-        screen: screen(width, height, density, xdpi, ydpi, rotation),
-        network: None,
-    };
-    let platform = Arc::new(JniPlatform { vm, callbacks });
-    match std::panic::catch_unwind(move || AndroidHost::start(config, platform)) {
+    let root = PathBuf::from(data_dir);
+    let screen = screen(width, height, density, xdpi, ydpi, rotation);
+    // A panic must never unwind into the JVM (that aborts the app): report it.
+    let started = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // SAFETY: first call in this process; the library has no threads yet.
+        unsafe { crate::host::prepare_process(&root, &language) }
+            .map_err(|error| anyhow::anyhow!("prepare app storage: {error}"))?;
+        AndroidHost::start(
+            StartConfig {
+                data_dir: root.clone(),
+                device_name,
+                screen,
+                network: None,
+            },
+            Arc::new(JniPlatform { vm, callbacks }),
+        )
+    }));
+    match started {
         Ok(Ok(host)) => {
             *slot = Some(Arc::new(host));
             std::ptr::null_mut()
@@ -215,7 +214,14 @@ pub extern "system" fn Java_com_hachiwii_oink_android_Native_nativeStart<'local>
             tracing::error!(error = format!("{error:#}"), "android backend start failed");
             java_string(&mut env, &format!("{error:#}"))
         }
-        Err(_) => java_string(&mut env, "android backend start panicked"),
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_owned())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".into());
+            java_string(&mut env, &format!("backend start panicked: {message}"))
+        }
     }
 }
 

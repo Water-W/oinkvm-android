@@ -25,13 +25,18 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tempfile = "3"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 
 [dev-dependencies]
-tempfile = "3"
 oink-test-support = { path = "../../tests/support" }
+
+# Clears HOME/TMPDIR before any thread starts, like an Android app process.
+[[test]]
+name = "android_process"
+harness = false
 
 [lints]
 workspace = true

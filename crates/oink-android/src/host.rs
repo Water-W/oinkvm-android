@@ -15,6 +15,44 @@ use crate::display::AndroidDisplay;
 use crate::input::AndroidInput;
 use crate::platform::{Platform, Screen, Shared};
 
+/// One-time process setup for an app process, before [`AndroidHost::start`].
+///
+/// Android app processes have no `HOME` and their default `TMPDIR` is not
+/// writable, so the storage roots are fixed explicitly under the app's private
+/// `root` (data = `root`, cache = `root/Cache`, logs = `root/Logs`), the
+/// environment gets usable `HOME`/`TMPDIR`, and file logging starts.
+///
+/// # Safety
+///
+/// Modifies the process environment: call once, before this library starts any
+/// thread of its own, and while no other thread of this library reads it.
+pub unsafe fn prepare_process(root: &std::path::Path, language: &str) -> std::io::Result<()> {
+    let roots = oink_foundation::paths::StoragePaths::isolated(root.to_path_buf());
+    for dir in [&roots.data, &roots.cache, &roots.logs] {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = roots.cache.join("tmp");
+    std::fs::create_dir_all(&tmp)?;
+    // SAFETY: the caller guarantees no concurrent environment access by this library.
+    unsafe {
+        if std::env::var_os("HOME").is_none() {
+            std::env::set_var("HOME", root);
+        }
+        let tmp_usable = std::env::var_os("TMPDIR")
+            .is_some_and(|dir| tempfile::Builder::new().tempfile_in(std::path::Path::new(&dir)).is_ok());
+        if !tmp_usable {
+            std::env::set_var("TMPDIR", &tmp);
+        }
+        if !language.is_empty() {
+            std::env::set_var("LANG", language);
+        }
+    }
+    // A repeated start in the same process keeps the roots it already fixed.
+    let _ = oink_foundation::paths::StoragePaths::set_process_roots(roots);
+    oink_agent::logs::init_service();
+    Ok(())
+}
+
 /// What the app knows at service start.
 #[derive(Clone, Debug)]
 pub struct StartConfig {
