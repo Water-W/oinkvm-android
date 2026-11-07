@@ -15,4 +15,5 @@
     <string name="clipboard_empty">The clipboard has no text</string>
     <string name="start_failed">Oink could not start: %1$s</string>
     <string name="diagnostics_missing">No diagnostics bundle yet. Save one in Settings → Diagnostics first.</string>
+    <string name="diagnostics_failed">Saving diagnostics failed: %1$s</string>
 </resources>

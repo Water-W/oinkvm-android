@@ -165,6 +165,19 @@ class MainActivity : Activity() {
                         runOnUiThread { openAccessibilitySettings() }
                         reply(id, """{"ok":null}""")
                     }
+                    "export_diagnostics" -> Backend.call(request.toString()) {
+                        // The interface shows only "failed": surface the reason.
+                        runCatching { JSONObject(it).optJSONObject("err") }.getOrNull()?.let { err ->
+                            val reason = err.optString("message").ifEmpty { err.optString("code") }
+                            android.util.Log.w("Oink", "export_diagnostics failed: $err")
+                            android.widget.Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.diagnostics_failed, reason),
+                                android.widget.Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                        reply(id, it)
+                    }
                     else -> Backend.call(request.toString()) { reply(id, it) }
                 }
                 return
@@ -225,7 +238,10 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Android has no folder to open: share the newest diagnostics bundle instead. */
+    /**
+     * Android has no folder to open: share the newest diagnostics bundle, or,
+     * when none could be saved, a ZIP of the raw log files.
+     */
     private fun shareLatestDiagnostics() {
         Backend.call("""{"method":"diagnostics_folder"}""") { reply ->
             val folder = runCatching { JSONObject(reply).getString("ok") }.getOrNull()
@@ -233,6 +249,7 @@ class MainActivity : Activity() {
                 ?.walkTopDown()
                 ?.filter { it.isFile && it.extension == "zip" }
                 ?.maxByOrNull { it.lastModified() }
+                ?: zipLogs()
             if (bundle == null) {
                 android.widget.Toast.makeText(this, R.string.diagnostics_missing, android.widget.Toast.LENGTH_LONG).show()
                 return@call
@@ -244,6 +261,24 @@ class MainActivity : Activity() {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(Intent.createChooser(send, bundle.name))
         }
+    }
+
+    /** Zips the files under oink/Logs into oink/Cache/oink-android-logs.zip; null without logs. */
+    private fun zipLogs(): java.io.File? {
+        val root = filesDir.resolve("oink")
+        val logs = root.resolve("Logs").walkTopDown().filter { it.isFile }.toList()
+        if (logs.isEmpty()) return null
+        val out = root.resolve("Cache").apply { mkdirs() }.resolve("oink-android-logs.zip")
+        return runCatching {
+            java.util.zip.ZipOutputStream(out.outputStream()).use { zip ->
+                for (file in logs) {
+                    zip.putNextEntry(java.util.zip.ZipEntry(file.relativeTo(root).path))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+            out
+        }.getOrNull()
     }
 
     /** Serves assets/web/<path> at https://appassets.androidplatform.net/<path>. */
