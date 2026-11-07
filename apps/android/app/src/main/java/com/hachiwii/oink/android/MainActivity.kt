@@ -213,11 +213,36 @@ class MainActivity : Activity() {
                 openExternal(args.optString("url"))
                 ok(null)
             }
+            "open_diagnostics_folder" -> {
+                shareLatestDiagnostics()
+                ok(null)
+            }
             "read_attribution" -> ok(
                 runCatching { assets.open("web/" + args.optString("path").trimStart('/')).bufferedReader().readText() }
                     .getOrDefault("See https://github.com/oinkvm/oink for license and attribution notices."),
             )
             else -> ok(null)
+        }
+    }
+
+    /** Android has no folder to open: share the newest diagnostics bundle instead. */
+    private fun shareLatestDiagnostics() {
+        Backend.call("""{"method":"diagnostics_folder"}""") { reply ->
+            val folder = runCatching { JSONObject(reply).getString("ok") }.getOrNull()
+            val bundle = folder?.let { java.io.File(it) }
+                ?.walkTopDown()
+                ?.filter { it.isFile && it.extension == "zip" }
+                ?.maxByOrNull { it.lastModified() }
+            if (bundle == null) {
+                android.widget.Toast.makeText(this, R.string.diagnostics_missing, android.widget.Toast.LENGTH_LONG).show()
+                return@call
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", bundle)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("application/zip")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, bundle.name))
         }
     }
 

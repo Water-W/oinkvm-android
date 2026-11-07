@@ -47,6 +47,17 @@ fn main() {
     .expect("backend starts without HOME");
     let reply: serde_json::Value = serde_json::from_str(&host.call(r#"{"method":"overview"}"#)).unwrap();
     assert!(reply.get("ok").is_some(), "{reply}");
+    // The app shares diagnostics bundles only from its private root.
+    let folder: serde_json::Value = serde_json::from_str(&host.call(r#"{"method":"diagnostics_folder"}"#)).unwrap();
+    let folder = folder["ok"].as_str().expect("diagnostics folder").to_owned();
+    assert!(std::path::Path::new(&folder).starts_with(&root), "{folder}");
+    let bundle: serde_json::Value =
+        serde_json::from_str(&host.call(r#"{"method":"export_diagnostics","params":{"last_minutes":5}}"#)).unwrap();
+    let path = bundle["ok"]["path"].as_str().unwrap_or_else(|| panic!("{bundle}"));
+    assert!(
+        std::path::Path::new(path).starts_with(&folder) && path.ends_with(".zip"),
+        "{path}"
+    );
     host.stop();
     assert!(root.join("Logs").is_dir());
     println!("android_process: ok");

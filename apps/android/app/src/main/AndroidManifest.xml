@@ -46,6 +46,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Shares diagnostics bundles from the app's private storage. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.hachiwii.oink.android.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <service
             android:name=".OinkService"
             android:exported="false"
