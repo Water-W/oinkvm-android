@@ -12,6 +12,8 @@
 //!
 //!     cargo run -p oink-android --example preview -- --paired
 //!
+//! With a desktop backend, its interface is served on the next port (1451).
+//!
 //! Development only: no authentication; it binds to loopback.
 
 #[path = "../tests/common/mod.rs"]
@@ -30,7 +32,17 @@ const PORT: u16 = 1450;
 /// Logs injected input; queues interface events for `/events`.
 #[derive(Default)]
 struct PreviewPlatform {
-    subscribers: Mutex<Vec<mpsc::Sender<String>>>,
+    subscribers: Subscribers,
+}
+
+type Subscribers = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
+
+/// One backend whose interface is served: the phone, or the paired desktop.
+struct Served {
+    call: Box<dyn Fn(&str) -> String + Send + Sync>,
+    live_views: Box<dyn Fn(&str) + Send + Sync>,
+    subscribers: Subscribers,
+    platform: &'static str,
 }
 
 impl Platform for PreviewPlatform {
@@ -100,7 +112,8 @@ fn main() -> anyhow::Result<()> {
         },
         platform.clone(),
     )?);
-    phone.set_accessibility(true);
+    // `--no-accessibility`: as if the accessibility service were turned off.
+    phone.set_accessibility(!std::env::args().any(|a| a == "--no-accessibility"));
     let _desktop = if paired {
         let desktop = common::desktop(
             temp.path(),
@@ -126,20 +139,62 @@ fn main() -> anyhow::Result<()> {
     } else {
         None
     };
-    let listener = TcpListener::bind(("127.0.0.1", PORT))?;
-    println!("preview: http://127.0.0.1:{PORT}/index.html?view=main");
-    for stream in listener.incoming() {
-        let (Ok(stream), phone, platform, web) = (stream, phone.clone(), platform.clone(), web.clone()) else {
-            continue;
-        };
-        std::thread::spawn(move || {
-            let _ = serve(stream, &phone, &platform, &web);
+    let served_phone = {
+        let (call, live) = (phone.clone(), phone.clone());
+        Arc::new(Served {
+            call: Box::new(move |request| call.call(request)),
+            live_views: Box::new(move |views| live.set_live_views(views)),
+            subscribers: platform.subscribers.clone(),
+            platform: "linux",
+        })
+    };
+    // The paired desktop's own interface, to view the group from its side.
+    if let Some(desktop) = &_desktop {
+        let node = desktop.node().clone();
+        let subscribers: Subscribers = Arc::default();
+        let events = subscribers.clone();
+        node.subscribe(Arc::new(move |event| {
+            if let Ok(json) = serde_json::to_string(event) {
+                events.lock().unwrap().retain(|s| s.send(json.clone()).is_ok());
+            }
+        }));
+        let served = Arc::new(Served {
+            call: Box::new(move |request| {
+                let result = serde_json::from_str::<oink_agent::api::Request>(request)
+                    .map_err(|e| oink_agent::api::ApiError::InvalidArgument { message: e.to_string() })
+                    .and_then(|request| oink_agent::api::dispatch(&node, request));
+                match result {
+                    Ok(reply) => serde_json::json!({ "ok": reply }).to_string(),
+                    Err(error) => serde_json::json!({ "err": error }).to_string(),
+                }
+            }),
+            live_views: Box::new(|_| {}),
+            subscribers,
+            platform: "windows",
         });
+        listen(PORT + 1, served, web.clone())?;
+        println!("desktop: http://127.0.0.1:{}/index.html?view=main", PORT + 1);
     }
+    println!("preview: http://127.0.0.1:{PORT}/index.html?view=main");
+    listen(PORT, served_phone, web)?.join().ok();
     Ok(())
 }
 
-fn serve(mut stream: TcpStream, phone: &AndroidHost, platform: &PreviewPlatform, web: &Path) -> std::io::Result<()> {
+fn listen(port: u16, served: Arc<Served>, web: PathBuf) -> std::io::Result<std::thread::JoinHandle<()>> {
+    let listener = TcpListener::bind(("127.0.0.1", port))?;
+    Ok(std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let (Ok(stream), served, web) = (stream, served.clone(), web.clone()) else {
+                continue;
+            };
+            std::thread::spawn(move || {
+                let _ = serve(stream, &served, &web);
+            });
+        }
+    }))
+}
+
+fn serve(mut stream: TcpStream, served: &Served, web: &Path) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
     reader.read_line(&mut line)?;
@@ -162,12 +217,12 @@ fn serve(mut stream: TcpStream, phone: &AndroidHost, platform: &PreviewPlatform,
     match (method, path) {
         ("POST", "/invoke") => {
             let value: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
-            let reply = invoke(phone, &value["command"], &value["args"]);
+            let reply = invoke(served, &value["command"], &value["args"]);
             respond(&mut stream, "application/json", reply.as_bytes())
         }
         ("GET", "/events") => {
             let (send, receive) = mpsc::channel();
-            platform.subscribers.lock().unwrap().push(send);
+            served.subscribers.lock().unwrap().push(send);
             stream
                 .write_all(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n")?;
             for json in receive {
@@ -206,16 +261,16 @@ fn serve(mut stream: TcpStream, phone: &AndroidHost, platform: &PreviewPlatform,
 }
 
 /// The same command mapping as `MainActivity.Bridge` / `MainActivity.shell`.
-fn invoke(phone: &AndroidHost, command: &serde_json::Value, args: &serde_json::Value) -> String {
+fn invoke(served: &Served, command: &serde_json::Value, args: &serde_json::Value) -> String {
     let ok = |value: serde_json::Value| serde_json::json!({ "ok": value }).to_string();
     match command.as_str().unwrap_or("") {
-        "api_call" => phone.call(&args["request"].to_string()),
+        "api_call" => (served.call)(&args["request"].to_string()),
         "boot_info" => ok(serde_json::json!({
-            "backend": "agent", "platform": "linux", "version": env!("CARGO_PKG_VERSION"),
+            "backend": "agent", "platform": served.platform, "version": env!("CARGO_PKG_VERSION"),
             "build": null, "open_update_failure": false
         })),
         "live_views" => {
-            phone.set_live_views(&args["views"].to_string());
+            (served.live_views)(&args["views"].to_string());
             ok(serde_json::Value::Null)
         }
         _ => ok(serde_json::Value::Null),
