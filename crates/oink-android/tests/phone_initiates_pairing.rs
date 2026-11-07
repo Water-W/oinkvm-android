@@ -48,6 +48,20 @@ fn phone_initiated_pairing_completes_and_survives_restart() {
     let profiles = phone.call(r#"{"method":"layout_profiles"}"#);
     assert!(!profiles.contains("profile_error"), "{profiles}");
     common::pair_nodes(&phone.node().unwrap(), desktop.node());
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    for (name, node) in [("desktop", desktop.node().clone()), ("phone", phone.node().unwrap())] {
+        use oink_agent::api::AgentApi;
+        let v = node
+            .layout_profile_command(oink_agent::layout_profiles::types::Command::Query)
+            .unwrap();
+        eprintln!(
+            "PROFILE {name} group={:?} catalog_token={} op={} err={}",
+            node.group_id(),
+            v["catalog_token"],
+            v["operation"]["status"],
+            v["error"]
+        );
+    }
     phone.stop();
     drop(phone);
 
