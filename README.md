@@ -2,9 +2,9 @@
 
 `oink-android-0.3.3-debug.apk`: debug-signed, arm64-v8a, built from
 [`feat/android`](https://github.com/Water-W/oinkvm-android/tree/feat/android)
-at commit 0e2e38b.
+at commit e051efa.
 
-SHA-256: `56562d827a89606b67fc3d00888621b0ef10b29ffc743a1fe039912e703cbaca`
+SHA-256: `67d8d430ae121662d2176fd6400658b964d4b7867355dea66274985e06316a35`
 
 Install with `adb install -r oink-android-0.3.3-debug.apk`, then turn on
 "Oink remote control" in Accessibility settings. See
