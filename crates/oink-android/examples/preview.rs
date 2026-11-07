@@ -1,7 +1,9 @@
 //! Browser preview of the Android app's interface against a real backend.
 //!
 //! Starts the Android host (synthetic platform layer) and, with `--paired`, a
-//! second desktop backend paired to it on loopback, then serves the APK's web
+//! second desktop backend paired to it on loopback (with `--incoming`, the
+//! desktop instead asks to pair a few seconds after start, so the phone's
+//! interface receives a request), then serves the APK's web
 //! assets (`apps/android/app/src/main/assets/web`, produced by
 //! `apps/android/build.py --skip-rust --skip-apk`) on http://127.0.0.1:1450.
 //! `preview.js` stands in for the Android `OinkAndroid` JavaScript interface
@@ -70,6 +72,7 @@ events.onmessage = m => window.__oinkAndroid && window.__oinkAndroid.event(JSON.
 fn main() -> anyhow::Result<()> {
     oink_agent::logs::init();
     let paired = std::env::args().any(|a| a == "--paired");
+    let incoming = std::env::args().any(|a| a == "--incoming");
     let web = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/android/app/src/main/assets/web");
     anyhow::ensure!(
         web.join("index.html").is_file(),
@@ -106,6 +109,19 @@ fn main() -> anyhow::Result<()> {
         );
         common::pair(desktop.node(), &phone);
         println!("paired with a desktop backend");
+        Some(desktop)
+    } else if incoming {
+        let desktop = common::desktop(
+            temp.path(),
+            oink_test_support::input::FakeInput::new(),
+            Arc::new(oink_test_support::clipboard::FakeClipboard::new()),
+        );
+        let (node, target) = (desktop.node().clone(), phone.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(8));
+            let id = common::request_pairing(&node, &target);
+            println!("desktop requested pairing {id}");
+        });
         Some(desktop)
     } else {
         None

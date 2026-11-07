@@ -62,8 +62,8 @@ pub fn desktop(root: &std::path::Path, input: FakeInput, clipboard: Arc<FakeClip
     .unwrap()
 }
 
-/// Desktop initiates; the phone accepts and enters the code through JSON.
-pub fn pair(desktop: &Node, phone: &AndroidHost) {
+/// The desktop asks to pair with the phone; returns the pairing id.
+pub fn request_pairing(desktop: &Node, phone: &AndroidHost) -> String {
     let phone_node = phone.node().unwrap();
     let (found_tx, found_rx) = std::sync::mpsc::channel();
     let operation = "00000000-0000-4000-8000-000000000001".to_string();
@@ -99,6 +99,13 @@ pub fn pair(desktop: &Node, phone: &AndroidHost) {
     let pairing::PairReply::Value(pairing::Started::Started { pair_id }) = started else {
         panic!("start refused: {started:?}")
     };
+    pair_id
+}
+
+/// Desktop initiates; the phone accepts and enters the code through JSON.
+pub fn pair(desktop: &Node, phone: &AndroidHost) {
+    let pair_id = request_pairing(desktop, phone);
+    let phone_node = phone.node().unwrap();
     // The phone's interface sees the request through the JSON API.
     let mut request = serde_json::Value::Null;
     wait("incoming request on the phone", 10, || {
