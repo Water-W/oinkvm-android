@@ -80,18 +80,22 @@ impl Default for Screen {
 
 impl Screen {
     /// Global coordinates are density-independent pixels, like macOS points:
-    /// a phone does not become a giant screen in the shared layout.
+    /// a phone does not become a giant screen in the shared layout. The shared
+    /// layout requires whole-unit screen geometry, so sizes are rounded.
     pub fn units_w(&self) -> f64 {
-        f64::from(self.width_px) / self.density.max(0.5)
+        (f64::from(self.width_px) / self.density.max(0.5)).round().max(1.0)
     }
     pub fn units_h(&self) -> f64 {
-        f64::from(self.height_px) / self.density.max(0.5)
+        (f64::from(self.height_px) / self.density.max(0.5)).round().max(1.0)
     }
+    /// Global units to physical pixels with the exact per-axis ratio, so the
+    /// rounded unit size still spans the whole screen.
     pub fn to_pixels(&self, x: f64, y: f64) -> (f64, f64) {
-        let d = self.density.max(0.5);
+        let sx = f64::from(self.width_px) / self.units_w();
+        let sy = f64::from(self.height_px) / self.units_h();
         (
-            (x * d).clamp(0.0, f64::from(self.width_px.saturating_sub(1))),
-            (y * d).clamp(0.0, f64::from(self.height_px.saturating_sub(1))),
+            (x * sx).clamp(0.0, f64::from(self.width_px.saturating_sub(1))),
+            (y * sy).clamp(0.0, f64::from(self.height_px.saturating_sub(1))),
         )
     }
 }

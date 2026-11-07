@@ -64,7 +64,11 @@ pub fn desktop(root: &std::path::Path, input: FakeInput, clipboard: Arc<FakeClip
 
 /// The desktop asks to pair with the phone; returns the pairing id.
 pub fn request_pairing(desktop: &Node, phone: &AndroidHost) -> String {
-    let phone_node = phone.node().unwrap();
+    request_between(desktop, &phone.node().unwrap())
+}
+
+/// `initiator` asks `responder` (on loopback) to pair; returns the pairing id.
+pub fn request_between(desktop: &Node, phone_node: &Node) -> String {
     let (found_tx, found_rx) = std::sync::mpsc::channel();
     let operation = "00000000-0000-4000-8000-000000000001".to_string();
     let expected = operation.clone();
@@ -171,4 +175,72 @@ pub fn pair(desktop: &Node, phone: &AndroidHost) {
         };
         active(desktop, &phone_node) && active(&phone_node, desktop)
     });
+}
+
+/// Either side initiates through the backend API; the other accepts and enters the code.
+pub fn pair_nodes(initiator: &Node, responder: &Node) {
+    let pair_id = request_between(initiator, responder);
+    let mut request = None;
+    wait("incoming request", 10, || {
+        request = responder
+            .pairings()
+            .unwrap()
+            .requests
+            .into_iter()
+            .find(|r| r.id == pair_id);
+        request.is_some()
+    });
+    let request = request.unwrap();
+    let before = initiator
+        .pairings()
+        .unwrap()
+        .sessions
+        .into_iter()
+        .find(|s| s.id == pair_id)
+        .unwrap()
+        .revision;
+    let accepted = responder.accept_pairing(request.id, request.revision).unwrap();
+    assert!(matches!(accepted, pairing::PairReply::Value(_)), "{accepted:?}");
+    wait("initiator shows the code", 10, || {
+        initiator
+            .pairings()
+            .unwrap()
+            .sessions
+            .iter()
+            .any(|s| s.id == pair_id && s.phase == 1 && s.revision > before)
+    });
+    let code = initiator.pairing_code(pair_id.clone()).unwrap().six_digits;
+    let mut revision = None;
+    wait("responder ready for the code", 10, || {
+        revision = responder
+            .pairings()
+            .unwrap()
+            .sessions
+            .into_iter()
+            .find(|s| s.id == pair_id && s.phase == 2)
+            .map(|s| s.revision);
+        revision.is_some()
+    });
+    let submitted = responder
+        .submit_pairing_code(pair_id.clone(), revision.unwrap(), 1, code)
+        .unwrap();
+    assert!(matches!(submitted, pairing::PairReply::Value(_)), "{submitted:?}");
+    wait_or(
+        "paired and sharing on both sides",
+        20,
+        || {
+            let active = |a: &Node, b: &Node| {
+                a.group()
+                    .unwrap()
+                    .members
+                    .iter()
+                    .any(|m| m.device.id.0 == b.id() && m.sharing == SharingState::Active)
+            };
+            active(initiator, responder) && active(responder, initiator)
+        },
+        || {
+            eprintln!("initiator pairings: {:?}", initiator.pairings());
+            eprintln!("initiator overview: {:?}", initiator.overview().map(|o| o.alerts));
+        },
+    );
 }

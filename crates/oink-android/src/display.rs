@@ -90,7 +90,8 @@ mod tests {
             rotation_deg: 0,
         };
         let info = display_info(&screen);
-        assert_eq!(info.bounds, Rect::new(0.0, 0.0, 400.0, 2400.0 / 2.7));
+        // 2400 / 2.7 = 888.9 dp: the shared layout needs whole units.
+        assert_eq!(info.bounds, Rect::new(0.0, 0.0, 400.0, 889.0));
         assert_eq!(info.pixel_width, 1080);
         let extent = info.reference_extent.unwrap();
         assert!((extent.w - 1080.0 / 400.0 * 0.0254 / REFERENCE_DIAGONAL_METERS).abs() < 1e-9);
